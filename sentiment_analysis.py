@@ -325,7 +325,7 @@ def analyze_brand_sentiment(brand_name : str):
 
 
 if __name__ == "__main__":
-    brand_name = "flipkart" 
+    brand_name = input("Enter brand name:")
     
     try:
         df, insights = analyze_brand_sentiment(brand_name)
