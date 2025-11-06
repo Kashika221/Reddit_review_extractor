@@ -9,4 +9,5 @@ apify_client
 praw
 torch
 wordcloud
-pandas
+uvicorn
+fastapi
