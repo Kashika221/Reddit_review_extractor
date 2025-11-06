@@ -82,7 +82,7 @@ class BrandDataCompiler:
             client_secret = os.getenv("REDDIT_SECRET_KEY"),
             user_agent="CompanyReviewScraper/1.0"
         )
-        reddit_data = reddit_scraper.scrape_company_reviews(brand_name, limit = reddit_limit, time_filter = 'year', min_score = 10, include_comments = True)
+        reddit_data = reddit_scraper.scrape_company_reviews(brand_name, limit = reddit_limit, time_filter = 'year', min_score = 70, include_comments = True)
         reddit_path = f"{brand_dir}/reddit.json"
         with open(reddit_path, "w", encoding = "utf-8") as f:
             json.dump(reddit_data, f, indent = 4, ensure_ascii = False)

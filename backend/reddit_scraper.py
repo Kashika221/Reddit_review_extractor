@@ -17,10 +17,10 @@ class RedditCompanyScraper:
     def scrape_company_reviews(self, company_name, limit = 25, time_filter = 'year', min_score = 0, include_comments = True):
         reviews = []
         search_queries = [
-            f"{company_name} Company review",
-            f"{company_name} Company experience",
-            f"{company_name} Company opinion",
-            f"working at {company_name}"
+            f"{company_name} Company customer review",
+            f"{company_name} Company customer experience",
+            f"{company_name} Company customer opinion",
+            f"employees working at {company_name}"
         ]
 
         for query in search_queries:
