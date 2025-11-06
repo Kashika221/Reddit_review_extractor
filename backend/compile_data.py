@@ -64,8 +64,17 @@ class BrandDataCompiler:
         brand_dir = f"data/compiled/{brand_name.lower().replace(' ', '_')}"
         os.makedirs(brand_dir, exist_ok=True)
 
-        print(f"\nScraping Twitter for '{brand_name}'...")
-        twitter_data = scrape_twitter(brand_name, mode = "by", max_items = twitter_max)
+        print(f"\nScraping Twitter for '{brand_name}' (brand posts)...")
+        twitter_by = scrape_twitter(brand_name, mode="by", max_items=twitter_max)
+        for t in twitter_by:
+           t["mode"] = "by"
+
+        print(f"\nScraping Twitter for '{brand_name}' (mentions)...")
+        twitter_mentions = scrape_twitter(brand_name, mode="mentions", max_items=twitter_max * 2, top_n=20)
+        for t in twitter_mentions:
+            t["mode"] = "mentions"
+
+        twitter_data = twitter_by + twitter_mentions
         twitter_path = f"{brand_dir}/twitter.json"
         with open(twitter_path, "w", encoding = "utf-8") as f:
             json.dump(twitter_data, f, indent = 4, ensure_ascii = False)
@@ -98,6 +107,8 @@ class BrandDataCompiler:
 
         print(f"\nCompiled {len(compiled)} items into {compiled_file}")
         return compiled
+
+    
 
 if __name__ == "__main__":
     brand = input("Enter the company/brand name: ").strip()
