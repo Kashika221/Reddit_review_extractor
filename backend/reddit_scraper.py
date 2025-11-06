@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 import praw
+import re
 
 load_dotenv()
 
@@ -14,74 +15,109 @@ class RedditCompanyScraper:
             user_agent = user_agent
         )
 
-    def scrape_company_reviews(self, company_name, limit = 25, time_filter = 'year', min_score = 0, include_comments = True):
+    def is_relevant(self, submission, company_name):
+        """Check if post is actually about the company"""
+        combined_text = (submission.title + " " + submission.selftext).lower()
+        company_lower = company_name.lower()
+        
+        # Must contain company name
+        if company_lower not in combined_text:
+            return False
+        
+        # Filter out irrelevant posts
+        irrelevant_keywords = ["gpu", "graphics card", "nvidia", "golf", "game", "mmorpg", "minecraft"]
+        for keyword in irrelevant_keywords:
+            if keyword in combined_text and company_lower not in submission.title.lower():
+                return False
+        
+        return True
+
+    def scrape_company_reviews(self, company_name, limit = 25, time_filter = 'year', min_score = 50, include_comments = True):
         reviews = []
+        
+        # Relevant subreddits for company reviews
+        relevant_subreddits = [
+            'reviews',
+            'Assistance',
+            'mildlyinfuriating',
+            'jobs',
+            'AskReddit',
+            'WorkReform',
+            'antiwork',
+            'personalfinance',
+            'Scams'
+        ]
+        
         search_queries = [
-            f"{company_name} Company customer review",
-            f"{company_name} Company customer experience",
-            f"{company_name} Company customer opinion",
-            f"employees working at {company_name}"
+            company_name,
+            f"{company_name} review",
+            f"{company_name} experience",
+            f"{company_name} customer service"
         ]
 
-        for query in search_queries:
-            print(f"Searching: {query}")
-            try:
-                submissions = self.reddit.subreddit('all').search(
-                    query, limit = limit, time_filter = time_filter
-                )
+        for subreddit_name in relevant_subreddits:
+            for query in search_queries:
+                print(f"Searching r/{subreddit_name} for: {query}")
+                try:
+                    subreddit = self.reddit.subreddit(subreddit_name)
+                    submissions = subreddit.search(
+                        query, limit = limit, time_filter = time_filter
+                    )
 
-                for submission in submissions:
-                    review_data = {
-                        'title' : submission.title,
-                        'author' : str(submission.author),
-                        'subreddit' : str(submission.subreddit),
-                        'score' : submission.score,
-                        'upvote_ratio' : submission.upvote_ratio,
-                        'num_comments' : submission.num_comments,
-                        'created_utc' : datetime.fromtimestamp(
-                            submission.created_utc
-                        ).strftime('%Y-%m-%d %H:%M:%S'),
-                        'url' : submission.url,
-                        'permalink' : f"https://reddit.com{submission.permalink}",
-                        'selftext' : submission.selftext,
-                        'type' : 'post',
-                        'search_query' : query
-                    }
-                    reviews.append(review_data)
+                    for submission in submissions:
+                        # Relevance check
+                        if not self.is_relevant(submission, company_name):
+                            continue
+                        
+                        # Skip if already collected
+                        if any(r['permalink'] == f"https://reddit.com{submission.permalink}" for r in reviews):
+                            continue
 
-                    submission.comments.replace_more(limit = 0)
-                    for comment in submission.comments.list()[:2]:
-                        if len(comment.body) > 50:
-                            comment_data = {
-                                'title' : f"Comment on: {submission.title}",
-                                'author' : str(comment.author),
-                                'subreddit' : str(submission.subreddit),
-                                'score' : comment.score,
-                                'created_utc' : datetime.fromtimestamp(
-                                    comment.created_utc
-                                ).strftime('%Y-%m-%d %H:%M:%S'),
-                                'permalink' : f"https://reddit.com{comment.permalink}",
-                                'selftext' : comment.body,
-                                'type' : 'comment',
-                                'parent_post' : submission.title,
-                                'search_query' : query
-                            }
-                            reviews.append(comment_data)
+                        review_data = {
+                            'title' : submission.title,
+                            'author' : str(submission.author),
+                            'subreddit' : str(submission.subreddit),
+                            'score' : submission.score,
+                            'upvote_ratio' : submission.upvote_ratio,
+                            'num_comments' : submission.num_comments,
+                            'created_utc' : datetime.fromtimestamp(
+                                submission.created_utc
+                            ).strftime('%Y-%m-%d %H:%M:%S'),
+                            'url' : submission.url,
+                            'permalink' : f"https://reddit.com{submission.permalink}",
+                            'selftext' : submission.selftext,
+                            'type' : 'post',
+                            'search_query' : query
+                        }
+                        reviews.append(review_data)
 
-            except Exception as e:
-                print(f"Error searching '{query}': {str(e)}")
+                        if include_comments:
+                            submission.comments.replace_more(limit = 0)
+                            for comment in submission.comments.list()[:2]:
+                                if len(comment.body) > 50 and company_name.lower() in comment.body.lower():
+                                    comment_data = {
+                                        'title' : f"Comment on: {submission.title}",
+                                        'author' : str(comment.author),
+                                        'subreddit' : str(submission.subreddit),
+                                        'score' : comment.score,
+                                        'created_utc' : datetime.fromtimestamp(
+                                            comment.created_utc
+                                        ).strftime('%Y-%m-%d %H:%M:%S'),
+                                        'permalink' : f"https://reddit.com{comment.permalink}",
+                                        'selftext' : comment.body,
+                                        'type' : 'comment',
+                                        'parent_post' : submission.title,
+                                        'search_query' : query
+                                    }
+                                    reviews.append(comment_data)
 
-        unique_reviews = []
-        seen = set()
-        for review in reviews:
-            if review['permalink'] not in seen:
-                unique_reviews.append(review)
-                seen.add(review['permalink'])
+                except Exception as e:
+                    print(f"Error searching r/{subreddit_name} for '{query}': {str(e)}")
 
-        print(f"Collected {len(unique_reviews)} items for '{company_name}'")
-        filtered_reviews = self.filter_reviews(unique_reviews, min_score, include_comments)
+        print(f"Collected {len(reviews)} items for '{company_name}'")
+        filtered_reviews = self.filter_reviews(reviews, min_score, include_comments)
         self.save_to_file(filtered_reviews, company_name, filtered = True)
-        return unique_reviews
+        return filtered_reviews
 
     def filter_reviews(self, reviews, min_score = 0, include_comments = True):
         filtered = []
